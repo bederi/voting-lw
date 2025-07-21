@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Checkbox Voting App</title>
+  <style>
+    body { font-family: Arial; padding: 20px; background: #f2f2f2; }
+    h2 { color: #333; }
+    label { display: block; margin: 4px 0; }
+    .section { margin-top: 30px; background: #fff; padding: 15px; border-radius: 5px; }
+    button { margin: 20px 0; padding: 10px 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    th { background: #eee; }
+  </style>
+</head>
+<body>
+
+  <h2>Select Your Name</h2>
+  <select id="voterSelect">
+    <option value="">-- Choose your name --</option>
+    <option>Bederi</option>
+    <option>Sil</option>
+    <option>Saeed</option>
+    <option>Gintoki</option>
+    <option>Carnele</option>
+    <option>Blaze</option>
+    <option>Lyo</option>
+    <option>Nigma</option>
+    <option>w3d</option>
+    <option>Lux</option>
+    <option>Rosi</option>
+  </select>
+
+  <div id="voteSections" style="display:none">
+
+    <div class="section">
+      <h2>Alliance Leader (Choose 1)</h2>
+      <select id="step1"></select>
+    </div>
+
+    <div class="section">
+      <h2>Tactician Rewards (Choose up to 4)</h2>
+      <div id="checkboxStep2"></div>
+    </div>
+
+    <div class="section">
+      <h2>Core Member Rewards (Choose up to 9 from Candidate List)</h2>
+      <div id="checkboxStep3"></div>
+    </div>
+
+    <div class="section">
+      <h2>Elite Rewards (Choose up to 30 from Candidate List)</h2>
+      <div id="checkboxStep4"></div>
+    </div>
+
+    <button onclick="submitVotes()">Submit Vote</button>
+  </div>
+
+  <table id="resultsTable">
+    <thead>
+      <tr>
+        <th>Voter</th>
+        <th>Alliance Leader</th>
+        <th>Tactician Rewards (4)</th>
+        <th>Core Member Rewards (9)</th>
+        <th>Elite Rewards (30)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const allNames = ['Bederi','Sil','Saeed','Gintoki','Carnele','Blaze','Lyo','Nigma','w3d','Lux','Rosi'];
+    const largeList = [
+      "General S","KKM","Puffo","Pino","West","JT","BBC","Don","Luis","Damian","Phini","Neo Noir",
+      "Jojo","Draco","Milan","Hutaz","Ershy","Ninja","Gianluca","Gandalf","Vergil","Borghez","Shark",
+      "Quack","Itachi","Dennis","Panda","Tudor","Maverick","Mango","Hercules Saeed","Akechi","Steku",
+      "jox","Kaschi","alex1m","hartman","linoleum","king of q","Rob","markov","Tano","Chicken Saeed",
+      "Ibra","Old slow man","milo","johnny","krokolin","puhlya","mars","cardillo","misanthrop","kikka",
+      "007","ludo","mzrab","raffa","hellfire","Mai","hpyroz","kuscheldrache","tempesta","adreasromy",
+      "pepe","sirdrago","spirit","pavel","dondonderon","momax","kobee","berli","dark lady","fabibi",
+      "devily","girami","Vi","Ivan","Mik","regulus","Lasion","NataliaPhilo","norichiko","MRC","DrJoker"
+    ];
+    const submittedVotes = [];
+
+    let filteredNames = [];
+
+    document.getElementById('voterSelect').addEventListener('change', function () {
+      const voter = this.value;
+      if (!voter) return;
+      document.getElementById('voteSections').style.display = 'block';
+
+      filteredNames = allNames.filter(name => name !== voter);
+      loadDropdown('step1', filteredNames);
+      loadCheckboxesWithLimit('checkboxStep2', filteredNames, 4);
+      loadCheckboxesWithLimit('checkboxStep3', largeList, 9);
+      loadCheckboxesWithLimit('checkboxStep4', largeList, 30);
+
+      // Smart Filtering between Step 1 and Step 2
+      document.getElementById('step1').addEventListener('change', filterStep2);
+      Array.from(document.getElementById('checkboxStep2').querySelectorAll('input')).forEach(cb => {
+        cb.addEventListener('change', filterStep1);
+      });
+    });
+
+    function loadDropdown(id, options) {
+      const select = document.getElementById(id);
+      select.innerHTML = '';
+      options.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt;
+        o.text = opt;
+        select.appendChild(o);
+      });
+    }
+
+    function loadCheckboxesWithLimit(containerId, options, limit) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      options.forEach(opt => {
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = opt;
+        checkbox.addEventListener('change', () => {
+          const checked = container.querySelectorAll('input:checked');
+          if (checked.length >= limit) {
+            container.querySelectorAll('input:not(:checked)').forEach(cb => cb.disabled = true);
+          } else {
+            container.querySelectorAll('input').forEach(cb => cb.disabled = false);
+          }
+        });
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(' ' + opt));
+        container.appendChild(label);
+      });
+    }
+
+    function getChecked(containerId) {
+      return Array.from(document.getElementById(containerId).querySelectorAll('input:checked')).map(c => c.value);
+    }
+
+    // Smart Filtering Functions
+    function filterStep2() {
+      const selectedStep1 = document.getElementById('step1').value;
+      const checkboxes = document.getElementById('checkboxStep2').querySelectorAll('input');
+      checkboxes.forEach(cb => {
+        cb.disabled = cb.value === selectedStep1 ? true : false;
+        if (cb.value === selectedStep1) cb.checked = false;
+      });
+    }
+
+    function filterStep1() {
+      const selectedStep2 = getChecked('checkboxStep2');
+      const selectStep1 = document.getElementById('step1');
+      Array.from(selectStep1.options).forEach(opt => {
+        opt.disabled = selectedStep2.includes(opt.value);
+        if (opt.disabled && selectStep1.value === opt.value) {
+          selectStep1.value = '';
+        }
+      });
+    }
+
+    function submitVotes() {
+      const voter = document.getElementById('voterSelect').value;
+      const s1 = document.getElementById('step1').value;
+      const s2 = getChecked('checkboxStep2');
+      const s3 = getChecked('checkboxStep3');
+      const s4 = getChecked('checkboxStep4');
+
+      if (!voter || !s1 || s2.length !== 4 || s3.length !== 9 || s4.length !== 30) {
+        alert("Make sure you've selected exactly: 1 Alliance Leader, 4 Tactician Rewards, 9 Core Member Rewards, 30 Elite Rewards.");
+        return;
+      }
+
+      const vote = { voter, step1: s1, step2: s2, step3: s3, step4: s4 };
+      submittedVotes.push(vote);
+      updateTable();
+      alert("✅ Vote submitted!");
+    }
+
+    function updateTable() {
+      const tbody = document.querySelector('#resultsTable tbody');
+      tbody.innerHTML = '';
+      submittedVotes.forEach(vote => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${vote.voter}</td>
+          <td>${vote.step1}</td>
+          <td>${vote.step2.join(', ')}</td>
+          <td>${vote.step3.join(', ')}</td>
+          <td>${vote.step4.join(', ')}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+  </script>
+
+</body>
+</html>
