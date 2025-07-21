@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Checkbox Voting App</title>
+  <title>Anonymous Voting App with Dashboard</title>
   <style>
     body { font-family: Arial; padding: 20px; background: #f2f2f2; }
     h2 { color: #333; }
@@ -12,6 +12,11 @@
     table { width: 100%; border-collapse: collapse; margin-top: 30px; }
     th, td { border: 1px solid #ccc; padding: 8px; }
     th { background: #eee; }
+    #dashboard { margin-top: 50px; background: #fff; padding: 15px; border-radius: 5px; }
+    .chart-container { width: 100%; max-width: 400px; display: inline-block; vertical-align: top; margin-right: 20px; }
+    @media (max-width: 900px) {
+      .chart-container { display: block; margin: 0 auto 30px auto; }
+    }
   </style>
 </head>
 <body>
@@ -60,7 +65,6 @@
   <table id="resultsTable">
     <thead>
       <tr>
-        <th>Voter</th>
         <th>Alliance Leader</th>
         <th>Tactician Rewards (4)</th>
         <th>Core Member Rewards (9)</th>
@@ -69,6 +73,29 @@
     </thead>
     <tbody></tbody>
   </table>
+
+  <div id="dashboard" style="display:none">
+    <h2>Dashboard: Voting Results</h2>
+    <div class="chart-container">
+      <h3>Alliance Leader</h3>
+      <canvas id="chart1"></canvas>
+    </div>
+    <div class="chart-container">
+      <h3>Tactician Rewards</h3>
+      <canvas id="chart2"></canvas>
+    </div>
+    <div class="chart-container">
+      <h3>Core Member Rewards</h3>
+      <canvas id="chart3"></canvas>
+    </div>
+    <div class="chart-container">
+      <h3>Elite Rewards</h3>
+      <canvas id="chart4"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
     const allNames = ['Bederi','Sil','Saeed','Gintoki','Carnele','Blaze','Lyo','Nigma','w3d','Lux','Rosi'];
@@ -83,26 +110,26 @@
       "devily","girami","Vi","Ivan","Mik","regulus","Lasion","NataliaPhilo","norichiko","MRC","DrJoker"
     ];
     const submittedVotes = [];
-
-    let filteredNames = [];
+    let voterName = "";
 
     document.getElementById('voterSelect').addEventListener('change', function () {
-      const voter = this.value;
-      if (!voter) return;
+      voterName = this.value;
+      if (!voterName) return;
       document.getElementById('voteSections').style.display = 'block';
-
-      filteredNames = allNames.filter(name => name !== voter);
-      loadDropdown('step1', filteredNames);
-      loadCheckboxesWithLimit('checkboxStep2', filteredNames, 4);
-      loadCheckboxesWithLimit('checkboxStep3', largeList, 9);
-      loadCheckboxesWithLimit('checkboxStep4', largeList, 30);
-
-      // Smart Filtering between Step 1 and Step 2
-      document.getElementById('step1').addEventListener('change', filterStep2);
-      Array.from(document.getElementById('checkboxStep2').querySelectorAll('input')).forEach(cb => {
-        cb.addEventListener('change', filterStep1);
-      });
+      renderAllCategories();
+      setupSmartFiltering();
     });
+
+    function renderAllCategories() {
+      // Step 1: Alliance Leader (can't pick yourself)
+      loadDropdown('step1', allNames.filter(name => name !== voterName));
+      // Step 2: Tactician (can't pick yourself)
+      loadCheckboxesWithLimit('checkboxStep2', allNames.filter(name => name !== voterName), 4);
+      // Step 3: Core Members (large list, can't pick yourself if in list)
+      loadCheckboxesWithLimit('checkboxStep3', largeList.filter(name => name !== voterName), 9);
+      // Step 4: Elite Rewards (large list, can't pick yourself)
+      loadCheckboxesWithLimit('checkboxStep4', largeList.filter(name => name !== voterName), 30);
+    }
 
     function loadDropdown(id, options) {
       const select = document.getElementById(id);
@@ -130,6 +157,7 @@
           } else {
             container.querySelectorAll('input').forEach(cb => cb.disabled = false);
           }
+          applySmartFiltering();
         });
         label.appendChild(checkbox);
         label.appendChild(document.createTextNode(' ' + opt));
@@ -141,43 +169,88 @@
       return Array.from(document.getElementById(containerId).querySelectorAll('input:checked')).map(c => c.value);
     }
 
-    // Smart Filtering Functions
-    function filterStep2() {
-      const selectedStep1 = document.getElementById('step1').value;
-      const checkboxes = document.getElementById('checkboxStep2').querySelectorAll('input');
-      checkboxes.forEach(cb => {
-        cb.disabled = cb.value === selectedStep1 ? true : false;
-        if (cb.value === selectedStep1) cb.checked = false;
+    // Smart Filtering between all categories
+    function setupSmartFiltering() {
+      document.getElementById('step1').addEventListener('change', applySmartFiltering);
+      Array.from(document.getElementById('checkboxStep2').querySelectorAll('input')).forEach(cb => {
+        cb.addEventListener('change', applySmartFiltering);
+      });
+      Array.from(document.getElementById('checkboxStep3').querySelectorAll('input')).forEach(cb => {
+        cb.addEventListener('change', applySmartFiltering);
+      });
+      Array.from(document.getElementById('checkboxStep4').querySelectorAll('input')).forEach(cb => {
+        cb.addEventListener('change', applySmartFiltering);
       });
     }
 
-    function filterStep1() {
+    function applySmartFiltering() {
+      // Gather all selected names from each step
+      const selectedStep1 = document.getElementById('step1').value;
       const selectedStep2 = getChecked('checkboxStep2');
+      const selectedStep3 = getChecked('checkboxStep3');
+      const selectedStep4 = getChecked('checkboxStep4');
+
+      const pickedNames = [];
+      if (selectedStep1) pickedNames.push(selectedStep1);
+      pickedNames.push(...selectedStep2, ...selectedStep3, ...selectedStep4);
+
+      // Step 1 dropdown: disable options picked elsewhere
       const selectStep1 = document.getElementById('step1');
       Array.from(selectStep1.options).forEach(opt => {
-        opt.disabled = selectedStep2.includes(opt.value);
-        if (opt.disabled && selectStep1.value === opt.value) {
-          selectStep1.value = '';
+        opt.disabled = pickedNames.includes(opt.value) && opt.value !== selectedStep1;
+      });
+      if (selectStep1.options[selectStep1.selectedIndex] && selectStep1.options[selectStep1.selectedIndex].disabled) {
+        selectStep1.value = '';
+      }
+
+      // Step 2 checkboxes
+      Array.from(document.getElementById('checkboxStep2').querySelectorAll('input')).forEach(cb => {
+        if (pickedNames.includes(cb.value) && !selectedStep2.includes(cb.value)) {
+          cb.checked = false;
+          cb.disabled = true;
+        } else {
+          cb.disabled = false;
+        }
+      });
+
+      // Step 3 checkboxes
+      Array.from(document.getElementById('checkboxStep3').querySelectorAll('input')).forEach(cb => {
+        if (pickedNames.includes(cb.value) && !selectedStep3.includes(cb.value)) {
+          cb.checked = false;
+          cb.disabled = true;
+        } else {
+          cb.disabled = false;
+        }
+      });
+
+      // Step 4 checkboxes
+      Array.from(document.getElementById('checkboxStep4').querySelectorAll('input')).forEach(cb => {
+        if (pickedNames.includes(cb.value) && !selectedStep4.includes(cb.value)) {
+          cb.checked = false;
+          cb.disabled = true;
+        } else {
+          cb.disabled = false;
         }
       });
     }
 
     function submitVotes() {
-      const voter = document.getElementById('voterSelect').value;
       const s1 = document.getElementById('step1').value;
       const s2 = getChecked('checkboxStep2');
       const s3 = getChecked('checkboxStep3');
       const s4 = getChecked('checkboxStep4');
 
-      if (!voter || !s1 || s2.length !== 4 || s3.length !== 9 || s4.length !== 30) {
+      if (!s1 || s2.length !== 4 || s3.length !== 9 || s4.length !== 30) {
         alert("Make sure you've selected exactly: 1 Alliance Leader, 4 Tactician Rewards, 9 Core Member Rewards, 30 Elite Rewards.");
         return;
       }
 
-      const vote = { voter, step1: s1, step2: s2, step3: s3, step4: s4 };
+      const vote = { step1: s1, step2: s2, step3: s3, step4: s4 };
       submittedVotes.push(vote);
       updateTable();
+      updateDashboard();
       alert("✅ Vote submitted!");
+      resetVoting();
     }
 
     function updateTable() {
@@ -186,7 +259,6 @@
       submittedVotes.forEach(vote => {
         const row = document.createElement('tr');
         row.innerHTML = `
-          <td>${vote.voter}</td>
           <td>${vote.step1}</td>
           <td>${vote.step2.join(', ')}</td>
           <td>${vote.step3.join(', ')}</td>
@@ -194,6 +266,89 @@
         `;
         tbody.appendChild(row);
       });
+    }
+
+    // Chart.js Pie Charts
+    let chart1, chart2, chart3, chart4;
+
+    function updateDashboard() {
+      document.getElementById('dashboard').style.display = 'block';
+
+      // Count votes per name for each category
+      const countVotes = (key, limitList) => {
+        const counter = {};
+        submittedVotes.forEach(vote => {
+          let items = Array.isArray(vote[key]) ? vote[key] : [vote[key]];
+          items.forEach(name => {
+            if (!limitList || limitList.includes(name)) {
+              counter[name] = (counter[name] || 0) + 1;
+            }
+          });
+        });
+        return counter;
+      };
+
+      // Pie for Alliance Leader
+      const data1 = countVotes('step1', allNames);
+      renderPieChart('chart1', data1, allNames);
+
+      // Pie for Tactician Rewards
+      const data2 = countVotes('step2', allNames);
+      renderPieChart('chart2', data2, allNames);
+
+      // Pie for Core Member Rewards
+      const data3 = countVotes('step3', largeList);
+      renderPieChart('chart3', data3, largeList);
+
+      // Pie for Elite Rewards
+      const data4 = countVotes('step4', largeList);
+      renderPieChart('chart4', data4, largeList);
+    }
+
+    function renderPieChart(canvasId, data, labelsList) {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      const labels = Object.keys(data);
+      const values = Object.values(data);
+
+      // Only show names with at least 1 vote for clarity
+      const filteredLabels = labels.filter((l, i) => values[i] > 0);
+      const filteredData = values.filter(v => v > 0);
+
+      // Random pastel colors
+      const colors = filteredLabels.map((_, i) => `hsl(${i * 37 % 360}, 70%, 70%)`);
+
+      // Destroy previous chart if exists
+      if (canvasId === 'chart1' && chart1) chart1.destroy();
+      if (canvasId === 'chart2' && chart2) chart2.destroy();
+      if (canvasId === 'chart3' && chart3) chart3.destroy();
+      if (canvasId === 'chart4' && chart4) chart4.destroy();
+
+      const chart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: filteredLabels,
+          datasets: [{
+            data: filteredData,
+            backgroundColor: colors,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: true, position: 'bottom' }
+          }
+        }
+      });
+
+      if (canvasId === 'chart1') chart1 = chart;
+      if (canvasId === 'chart2') chart2 = chart;
+      if (canvasId === 'chart3') chart3 = chart;
+      if (canvasId === 'chart4') chart4 = chart;
+    }
+
+    function resetVoting() {
+      document.getElementById('voterSelect').value = '';
+      document.getElementById('voteSections').style.display = 'none';
     }
   </script>
 
